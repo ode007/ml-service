@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Login - SIAKAD SOC Portal{% endblock %}
+
+{% block content %}
+<div class="min-h-[75vh] flex items-center justify-center">
+    <div class="w-full max-w-md">
+        <!-- Login Card -->
+        <div class="bg-soc-card border border-soc-border rounded-2xl p-8 shadow-2xl relative overflow-hidden backdrop-blur-xl">
+            <!-- Subtle Cyber Glow Accent -->
+            <div class="absolute -top-10 -right-10 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute -bottom-10 -left-10 w-32 h-32 bg-rose-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            <!-- Header -->
+            <div class="text-center mb-8">
+                <div class="inline-flex p-3 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 mb-3 shadow-inner">
+                    <i class="fa-solid fa-lock text-2xl"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-white tracking-wide">PORTAL ADMIN</h1>
+                <p class="text-xs text-slate-400 mt-1">Dashboard Keamanan & Monitoring Web</p>
+            </div>
+
+            <!-- Error Notification -->
+            {% if error %}
+            <div class="mb-5 p-3 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-400 text-xs flex items-center space-x-2">
+                <i class="fa-solid fa-circle-exclamation text-sm flex-shrink-0"></i>
+                <span>{{ error }}</span>
+            </div>
+            {% endif %}
+
+            <!-- Form -->
+            <form action="{{ url_for('auth.login') }}" method="POST" class="space-y-5">
+                <div>
+                    <label for="username" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Username</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 pointer-events-none">
+                            <i class="fa-solid fa-user"></i>
+                        </span>
+                        <input type="text" id="username" name="username" required autofocus placeholder="Masukkan username analyst"
+                            class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-900 border border-soc-border text-slate-200 text-sm focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all placeholder-slate-600">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="password" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Password</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 pointer-events-none">
+                            <i class="fa-solid fa-key"></i>
+                        </span>
+                        <input type="password" id="password" name="password" required placeholder="••••••••"
+                            class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-900 border border-soc-border text-slate-200 text-sm focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all placeholder-slate-600">
+                    </div>
+                </div>
+
+                <button type="submit"
+                    class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold text-sm shadow-lg shadow-cyan-600/30 transition-all flex items-center justify-center space-x-2">
+                    <span>Masuk ke Dashboard</span>
+                    <i class="fa-solid fa-arrow-right text-xs"></i>
+                </button>
+            </form>
+
+            
+        </div>
+    </div>
+</div>
+{% endblock %}
+

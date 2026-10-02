@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}SOC Threat Intelligence Dashboard{% endblock %}</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        soc: {
+                            bg: '#0B0F19',
+                            card: '#111827',
+                            cardHover: '#161F36',
+                            border: '#1E293B',
+                            accent: '#06B6D4',
+                            warning: '#F59E0B',
+                            danger: '#EF4444',
+                            success: '#10B981'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js & Plugins (Zoom & Pan support) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    <style>
+        /* Hilangkan efek bounce (overscroll/rubber-banding) pada dashboard dan modal */
+        html, body {
+            overscroll-behavior: none;
+            overscroll-behavior-y: none;
+        }
+
+        #incident-modal,
+        #modal-container,
+        .overflow-y-auto,
+        .overflow-x-auto,
+        .overflow-auto {
+            overscroll-behavior: none;
+            overscroll-behavior-y: none;
+        }
+
+        body {
+            background-color: #0B0F19;
+            color: #E2E8F0;
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+        .glow-accent {
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.25);
+        }
+        .glow-danger {
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.25);
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0B0F19;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1E293B;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #334155;
+        }
+
+        /* ========================================================= */
+        /* ATURAN LIGHT MODE (HANYA AKTIF KETIKA CLASS 'dark' DILEPAS) */
+        /* ========================================================= */
+        html:not(.dark) body {
+            background-color: #F8FAFC !important;
+            color: #0F172A !important;
+        }
+        html:not(.dark) header {
+            background-color: #FFFFFF !important;
+            border-color: #E2E8F0 !important;
+        }
+        html:not(.dark) header .font-extrabold {
+            color: #0F172A !important;
+        }
+        html:not(.dark) .bg-soc-card,
+        html:not(.dark) .bg-soc-card\/70,
+        html:not(.dark) .bg-soc-card\/40 {
+            background-color: #FFFFFF !important;
+            border-color: #E2E8F0 !important;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+        }
+        html:not(.dark) .border-soc-border {
+            border-color: #E2E8F0 !important;
+        }
+        html:not(.dark) .text-white {
+            color: #0F172A !important;
+        }
+        html:not(.dark) .text-slate-400 {
+            color: #64748B !important;
+        }
+        html:not(.dark) .text-slate-300 {
+            color: #334155 !important;
+        }
+        html:not(.dark) .text-slate-200 {
+            color: #1E293B !important;
+        }
+        html:not(.dark) .bg-slate-900,
+        html:not(.dark) .bg-slate-900\/80,
+        html:not(.dark) .bg-slate-900\/50,
+        html:not(.dark) .bg-slate-950\/80,
+        html:not(.dark) .bg-slate-800 {
+            background-color: #F1F5F9 !important;
+            color: #1E293B !important;
+        }
+        html:not(.dark) .border-slate-800,
+        html:not(.dark) .border-slate-800\/80,
+        html:not(.dark) .border-slate-700,
+        html:not(.dark) .border-slate-700\/80 {
+            border-color: #CBD5E1 !important;
+        }
+        html:not(.dark) select,
+        html:not(.dark) input {
+            background-color: #FFFFFF !important;
+            border-color: #CBD5E1 !important;
+            color: #0F172A !important;
+        }
+        html:not(.dark) thead {
+            background-color: #F8FAFC !important;
+            border-color: #E2E8F0 !important;
+        }
+        html:not(.dark) thead th {
+            color: #64748B !important;
+        }
+        html:not(.dark) tbody tr:hover {
+            background-color: #F8FAFC !important;
+        }
+        html:not(.dark) #incident-modal #modal-container {
+            background-color: #FFFFFF !important;
+            border-color: #CBD5E1 !important;
+        }
+        html:not(.dark) #btn-theme-toggle {
+            background-color: #F1F5F9 !important;
+            border-color: #CBD5E1 !important;
+            color: #0F172A !important;
+        }
+    </style>
+    <script>
+        // Cek preferensi tema awal
+        (function() {
+            var saved = localStorage.getItem('soc_theme');
+            if (saved === 'light') {
+                document.documentElement.classList.remove('dark');
+            } else {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+    </script>
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-cyan-500 selection:text-white">
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-soc-card border-b border-soc-border sticky top-0 z-50 px-4 lg:px-8 py-3.5 backdrop-blur-md bg-opacity-90">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <!-- Brand & Status -->
+            <div class="flex items-center space-x-4">
+                <div class="h-10 w-10 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold text-xl shadow-inner">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </div>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <span class="font-extrabold tracking-wider text-white text-base lg:text-lg">ADMIN <span class="text-cyan-400">PANEL</span></span>
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800/60 font-mono">v1.0</span>
+                    </div>
+                    <p class="text-xs text-slate-400">Intelijen Ancaman & Deteksi Anomali Berbasis ML</p>
+                </div>
+            </div>
+
+            <!-- Header Right: System Status, Single Theme Toggle & User Action -->
+            <div class="flex items-center space-x-3 sm:space-x-5">
+                <!-- SATU TOMBOL PENGATUR DARK / LIGHT MODE -->
+                <button id="btn-theme-toggle" onclick="toggleTheme()" class="px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-xs font-medium text-slate-300 hover:text-white transition flex items-center space-x-1.5 cursor-pointer" title="Beralih Mode Gelap / Terang">
+                    <i id="theme-icon" class="fa-solid fa-moon text-cyan-400"></i>
+                    <span id="theme-text">Dark</span>
+                </button>
+
+                <!-- Live Pulse Engine Status -->
+                <div class="hidden sm:flex items-center space-x-2 bg-slate-900/80 px-3 py-1.5 rounded-full border border-slate-800">
+                    <span class="relative flex h-2.5 w-2.5">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                    </span>
+                    <span class="text-xs font-medium text-emerald-400 tracking-wide font-mono" id="nav-engine-status">ONLINE</span>
+                    <span class="text-xs text-slate-500">|</span>
+                    <span class="text-xs font-mono text-slate-400" id="nav-latency">~1.2 ms</span>
+                </div>
+
+                {% if session.get('user') %}
+                <div class="flex items-center space-x-3">
+                    <div class="flex items-center space-x-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">
+                        <div class="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs font-bold">
+                            <i class="fa-solid fa-user-secret"></i>
+                        </div>
+                        <span class="text-xs font-medium text-slate-200">{{ session['user']['username'] }}</span>
+                    </div>
+                    <a href="{{ url_for('auth.logout') }}" class="text-slate-400 hover:text-rose-400 transition-colors p-2 text-sm rounded-lg hover:bg-rose-500/10" title="Keluar">
+                        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-soc-border py-4 text-center text-xs text-slate-500 bg-soc-card/40">
+        <p>&copy; 2026 SIAKAD Security Operations Center. Powered by Random Forest & Flask Intelligence Service.</p>
+    </footer>
+
+    <!-- Script Pengatur Satu Tombol Dark / Light Mode -->
+    <script>
+        function updateThemeUI(isDark) {
+            var icon = document.getElementById('theme-icon');
+            var text = document.getElementById('theme-text');
+            if (!icon || !text) return;
+            if (isDark) {
+                icon.className = 'fa-solid fa-moon text-cyan-400';
+                text.innerText = 'Dark';
+            } else {
+                icon.className = 'fa-solid fa-sun text-amber-500';
+                text.innerText = 'Light';
+            }
+        }
+
+        function toggleTheme() {
+            var html = document.documentElement;
+            var isDark = html.classList.toggle('dark');
+            localStorage.setItem('soc_theme', isDark ? 'dark' : 'light');
+            updateThemeUI(isDark);
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            updateThemeUI(document.documentElement.classList.contains('dark'));
+        });
+    </script>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

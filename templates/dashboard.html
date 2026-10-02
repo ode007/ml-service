@@ -1,0 +1,537 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - SIAKAD SOC Threat Intelligence{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Top Alert / Auto-refresh Banner -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-soc-card/70 border border-soc-border p-4 rounded-xl">
+        <div class="flex items-center space-x-3">
+            <span class="flex h-3 w-3 relative">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
+            </span>
+            <div>
+                <h2 class="text-sm font-semibold text-white">Live Monitoring Stream Active</h2>
+                <p class="text-xs text-slate-400">Sinkronisasi otomatis setiap 3 detik via background polling.</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-3">
+            <span class="text-xs text-slate-400">Update terakhir: <span id="last-updated" class="font-mono text-cyan-400">Baru saja</span></span>
+            <button id="btn-refresh" class="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center space-x-1.5">
+                <i class="fa-solid fa-arrows-rotate" id="refresh-icon"></i>
+                <span>Refresh</span>
+            </button>
+            <button id="btn-clear-logs" class="text-xs px-3 py-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 transition flex items-center space-x-1.5" title="Hapus seluruh log untuk reset testing">
+                <i class="fa-solid fa-trash-can"></i>
+                <span>Reset Logs</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 1. High-Level Metrics (4 Cards) -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Total Requests -->
+        <div class="bg-soc-card border border-soc-border rounded-xl p-5 hover:border-slate-700 transition relative overflow-hidden group">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Request</p>
+                    <h3 class="text-2xl lg:text-3xl font-extrabold text-white mt-1 font-mono" id="stat-total-requests">{{ metrics.total_requests }}</h3>
+                    <p class="text-xs text-slate-500 mt-1">Lalu lintas diproses</p>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+                    <i class="fa-solid fa-globe"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Threat Ratio -->
+        <div class="bg-soc-card border border-soc-border rounded-xl p-5 hover:border-slate-700 transition relative overflow-hidden group">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Threat Ratio</p>
+                    <h3 class="text-2xl lg:text-3xl font-extrabold text-rose-400 mt-1 font-mono" id="stat-threat-ratio">{{ metrics.threat_ratio }}%</h3>
+                    <p class="text-xs text-slate-500 mt-1"><span id="stat-total-attacks">{{ metrics.total_attacks }}</span> ancaman terdeteksi</p>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Normal Traffic -->
+        <div class="bg-soc-card border border-soc-border rounded-xl p-5 hover:border-slate-700 transition relative overflow-hidden group">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Normal Traffic</p>
+                    <h3 class="text-2xl lg:text-3xl font-extrabold text-emerald-400 mt-1 font-mono" id="stat-total-normal">{{ metrics.total_normal }}</h3>
+                    <p class="text-xs text-slate-500 mt-1">Lalu lintas terverifikasi aman</p>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+                    <i class="fa-solid fa-shield-check"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Engine Status & Latency -->
+        <div class="bg-soc-card border border-soc-border rounded-xl p-5 hover:border-slate-700 transition relative overflow-hidden group">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Engine Latency</p>
+                    <div class="flex items-baseline space-x-2 mt-1">
+                        <h3 class="text-2xl lg:text-3xl font-extrabold text-cyan-400 font-mono" id="stat-latency">~1.2 ms</h3>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-1">Uptime: <span id="stat-uptime" class="font-mono text-slate-300">0h 0m</span></p>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+                    <i class="fa-solid fa-bolt-lightning"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Charts Section (Line Chart & Doughnut Chart) -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Real-Time Attack Trend Line Chart -->
+        <div class="lg:col-span-2 bg-soc-card border border-soc-border rounded-xl p-5 shadow-lg">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <div>
+                    <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-chart-line text-cyan-400"></i>
+                        <span>Tren Fluktuasi Serangan Real-Time</span>
+                    </h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Aktivitas lalu lintas serangan vs normal per menit</p>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <!-- Nav / Zoom Help Tag -->
+                    <span class="hidden sm:inline-flex items-center text-[10px] text-slate-400 font-mono bg-slate-900/80 px-2 py-1 rounded border border-slate-800">
+                        <i class="fa-solid fa-arrows-left-right mr-1.5 text-cyan-400"></i> Geser Drag &bull; Scroll Zoom
+                    </span>
+
+                    <!-- Zoom Out / Zoom In buttons -->
+                    <div class="inline-flex rounded-lg border border-slate-800 bg-slate-900/80 p-0.5 shadow-inner">
+                        <button id="btn-trend-zoom-out" type="button" title="Zoom Out (Per Jam / Tinjau Luas)" class="px-2 py-1 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded transition text-xs cursor-pointer">
+                            <i class="fa-solid fa-magnifying-glass-minus"></i>
+                        </button>
+                        <button id="btn-trend-zoom-in" type="button" title="Zoom In (Per Menit / Rinci)" class="px-2 py-1 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded transition text-xs cursor-pointer">
+                            <i class="fa-solid fa-magnifying-glass-plus"></i>
+                        </button>
+                    </div>
+
+                    <!-- Reset to Live button (shown when panned to past) -->
+                    <button id="btn-reset-trend-zoom" type="button" class="hidden px-2.5 py-1 text-xs font-semibold rounded bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 transition items-center gap-1.5 shadow-sm cursor-pointer">
+                        <i class="fa-solid fa-rotate-right text-[10px]"></i>
+                        <span>Live Terkini</span>
+                    </button>
+
+                    <!-- Status indicator badge -->
+                    <span id="trend-live-badge" class="inline-flex items-center gap-1.5 text-xs font-mono px-2 py-1 rounded bg-slate-900 border border-slate-800 text-emerald-400">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span id="trend-live-status-text">LIVE</span>
+                    </span>
+                </div>
+            </div>
+            <div class="h-64 relative select-none">
+                <canvas id="attackTrendChart" class="cursor-grab active:cursor-grabbing"></canvas>
+            </div>
+        </div>
+
+        <!-- Category Breakdown Doughnut Chart -->
+        <div class="bg-soc-card border border-soc-border rounded-xl p-5 shadow-lg">
+            <div class="mb-4">
+                <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-chart-pie text-cyan-400"></i>
+                    <span>Proporsi Jenis Ancaman</span>
+                </h3>
+                <p class="text-xs text-slate-400 mt-0.5">Distribusi kategori serangan terdeteksi</p>
+            </div>
+            <div class="h-64 relative flex items-center justify-center">
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Real-Time Attack Activity Log Table & IP Blacklist -->
+    <div class="bg-soc-card border border-soc-border rounded-xl shadow-lg overflow-hidden">
+        <!-- Navigation Tabs: Log Aktivitas vs IP Blacklist -->
+        <div class="flex items-center border-b border-soc-border bg-slate-900/60 px-5 pt-3 gap-2">
+            <button type="button" id="tab-btn-logs" onclick="switchTableTab('logs')"
+                class="px-4 py-2.5 text-xs font-bold border-b-2 border-cyan-400 text-cyan-400 flex items-center gap-2 transition cursor-pointer">
+                <i class="fa-solid fa-list-check"></i>
+                <span>Log Aktivitas Serangan</span>
+            </button>
+            <button type="button" id="tab-btn-blacklist" onclick="switchTableTab('blacklist')"
+                class="px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition cursor-pointer">
+                <i class="fa-solid fa-ban text-rose-400"></i>
+                <span>IP Blacklist</span>
+                <span id="blacklist-badge-count" class="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/30">{{ blocked_ips|length if blocked_ips else 0 }}</span>
+            </button>
+        </div>
+
+        <!-- TAB 1: Log Aktivitas Serangan -->
+        <div id="tab-content-logs">
+        <!-- Table Header & Controls -->
+        <div class="p-5 border-b border-soc-border flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-list-check text-cyan-400"></i>
+                    <span>Log Aktivitas Serangan Terkini</span>
+                </h3>
+                <p class="text-xs text-slate-400 mt-0.5">Klik pada tombol Action untuk melihat jendela detail insiden</p>
+            </div>
+
+            <!-- Filters -->
+            <div class="flex flex-wrap items-center gap-3">
+                <!-- Date Filter (Per Hari / Arsip Kemarin) -->
+                <div class="relative flex items-center">
+                    <span class="text-xs text-slate-400 mr-2 hidden sm:inline"><i class="fa-regular fa-calendar text-cyan-400"></i> Tanggal:</span>
+                    <input type="date" id="filter-date" value="{{ today_date }}" 
+                        class="bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-cyan-500 font-mono">
+                    <button type="button" id="btn-date-today" title="Kembali ke Hari Ini"
+                        class="ml-1.5 px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] text-cyan-400 border border-slate-700 transition cursor-pointer">
+                        Hari Ini
+                    </button>
+                </div>
+
+                <!-- Category Filter -->
+                <div class="relative">
+                    <select id="filter-category" class="bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-cyan-500">
+                        <option value="all">Semua Kategori</option>
+                        <option value="SQL Injection">SQL Injection</option>
+                        <option value="XSS">XSS</option>
+                        <option value="Path Traversal">Path Traversal</option>
+                    </select>
+                </div>
+
+                <!-- Search Input -->
+                <div class="relative">
+                    <input type="text" id="filter-search" placeholder="Cari IP / Endpoint / Payload..."
+                        class="bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg pl-8 pr-3 py-2 focus:outline-none focus:border-cyan-500 placeholder-slate-500 w-48 lg:w-60">
+                    <span class="absolute inset-y-0 left-0 pl-2.5 flex items-center text-slate-500 pointer-events-none text-xs">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Table Container -->
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-300">
+                <thead class="bg-slate-900/80 text-slate-400 uppercase font-semibold border-b border-soc-border">
+                    <tr>
+                        <th class="px-4 py-3">Timestamp</th>
+                        <th class="px-4 py-3">Attacker IP</th>
+                        <th class="px-4 py-3">Method</th>
+                        <th class="px-4 py-3">Endpoint Target</th>
+                        <th class="px-4 py-3">Kategori</th>
+                        <th class="px-4 py-3">Confidence</th>
+                        <th class="px-4 py-3">Detail</th>
+                    </tr>
+                </thead>
+                <tbody id="incident-table-body" class="divide-y divide-soc-border">
+                    {% if incidents %}
+                        {% for inc in incidents %}
+                        <tr class="hover:bg-slate-800/40 transition">
+                            <td class="px-4 py-3 font-mono text-slate-400 whitespace-nowrap">{{ inc.timestamp }}</td>
+                            <td class="px-4 py-3 font-mono font-medium text-cyan-300 whitespace-nowrap">{{ inc.ip_address }}</td>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                <span class="px-1.5 py-0.5 rounded text-[11px] font-mono {% if inc.method == 'POST' %}bg-amber-950 text-amber-400 border border-amber-800{% else %}bg-blue-950 text-blue-400 border border-blue-800{% endif %}">
+                                    {{ inc.method }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 max-w-xs truncate" title="{{ inc.url }}">
+                                <span class="font-mono text-slate-200">{{ inc.url }}</span>
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                <span class="px-2 py-0.5 rounded-full font-semibold text-[11px] 
+                                    {% if inc.category == 'SQL Injection' %}bg-rose-950 text-rose-300 border border-rose-800
+                                    {% elif inc.category == 'XSS' %}bg-amber-950 text-amber-300 border border-amber-800
+                                    {% elif inc.category == 'Path Traversal' %}bg-purple-950 text-purple-300 border border-purple-800
+                                    {% else %}bg-slate-800 text-slate-300{% endif %}">
+                                    {{ inc.category }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 font-mono whitespace-nowrap {% if inc.confidence >= 0.6 %}text-rose-400 font-bold{% else %}text-slate-300{% endif %}" {% if inc.confidence >= 0.6 %}style="color: #f43f5e !important; font-weight: 700;"{% endif %}>
+                                {{ "%.1f"|format(inc.confidence * 100) }}%
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                <button data-id="{{ inc.id }}" onclick="showIncidentDetail(this.dataset.id)" 
+                                    class="px-2.5 py-1 rounded bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 font-semibold text-[11px] inline-flex items-center space-x-1.5 transition">
+                                    <i class="fa-solid fa-circle-info text-[10px]"></i>
+                                    <span>Detail</span>
+                                    <i class="fa-solid fa-chevron-right text-[9px] text-cyan-300/80"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="px-4 py-8 text-center text-slate-500">
+                                <i class="fa-solid fa-shield-heart text-2xl text-slate-600 mb-2"></i>
+                                <p>Belum ada insiden serangan yang tercatat pada tanggal ini.</p>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination Controls (10 Data per Halaman) -->
+        <div class="p-3.5 px-5 border-t border-soc-border bg-slate-900/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <span class="text-slate-400" id="pagination-info">
+                Menampilkan {% if pagination and pagination.total > 0 %}1 - {% if pagination.total > 10 %}10{% else %}{{ pagination.total }}{% endif %} dari {{ pagination.total }}{% else %}0{% endif %} insiden
+            </span>
+            <div class="flex items-center space-x-2">
+                <button id="btn-prev-page" disabled
+                    class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-white disabled:opacity-40 disabled:pointer-events-none transition flex items-center space-x-1 cursor-pointer">
+                    <i class="fa-solid fa-chevron-left text-[10px]"></i>
+                    <span>Prev</span>
+                </button>
+                <span class="px-3 py-1 font-mono text-cyan-400 bg-slate-900 rounded border border-slate-800" id="pagination-page-indicator">
+                    1 / {% if pagination %}{{ pagination.total_pages }}{% else %}1{% endif %}
+                </span>
+                {% if not pagination or pagination.total_pages == 1 %}
+                <button id="btn-next-page" disabled
+                    class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-white disabled:opacity-40 disabled:pointer-events-none transition flex items-center space-x-1 cursor-pointer">
+                    <span>Next</span>
+                    <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                </button>
+                {% else %}
+                <button id="btn-next-page"
+                    class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-white disabled:opacity-40 disabled:pointer-events-none transition flex items-center space-x-1 cursor-pointer">
+                    <span>Next</span>
+                    <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        </div>
+        <!-- End TAB 1 -->
+
+        <!-- TAB 2: IP Blacklist -->
+        <div id="tab-content-blacklist" class="hidden">
+            <!-- Blacklist Header & Quick Info -->
+            <div class="p-5 border-b border-soc-border flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-ban text-rose-500"></i>
+                        <span>Daftar Alamat IP yang Diblokir (Blacklist)</span>
+                    </h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Permintaan HTTP dari alamat IP ini langsung di-drop (Fast Intercept) pada lapisan gateway</p>
+                </div>
+                <div>
+                    <button type="button" onclick="refreshBlockedIps()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 transition flex items-center gap-1.5 cursor-pointer">
+                        <i class="fa-solid fa-rotate text-cyan-400"></i>
+                        <span>Muat Ulang</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Blacklist Table -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-slate-900/80 text-slate-400 uppercase tracking-wider font-semibold border-b border-soc-border text-[11px]">
+                            <th class="px-4 py-3">IP Address</th>
+                            <th class="px-4 py-3">Alasan Pemblokiran</th>
+                            <th class="px-4 py-3">Waktu Blokir</th>
+                            <th class="px-4 py-3">Status</th>
+                            <th class="px-4 py-3 text-right">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="blacklist-table-body" class="divide-y divide-soc-border font-sans">
+                        {% if blocked_ips %}
+                            {% for b_ip in blocked_ips %}
+                            <tr class="hover:bg-slate-800/40 transition">
+                                <td class="px-4 py-3 font-mono font-bold text-rose-400 whitespace-nowrap">
+                                    <span class="inline-flex items-center gap-1.5">
+                                        <i class="fa-solid fa-ban text-xs text-rose-500"></i>
+                                        <span>{{ b_ip.ip_address }}</span>
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-slate-300 max-w-xs truncate" title="{{ b_ip.reason }}">
+                                    {{ b_ip.reason or 'Terdeteksi aktivitas berbahaya' }}
+                                </td>
+                                <td class="px-4 py-3 font-mono text-slate-400 whitespace-nowrap">
+                                    {{ b_ip.blocked_at }}
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    <span class="px-2 py-0.5 rounded-full font-semibold text-[10px] bg-rose-950 text-rose-300 border border-rose-800 inline-flex items-center gap-1">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                                        <span>TERBLOKIR</span>
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-right whitespace-nowrap">
+                                    <button data-ip="{{ b_ip.ip_address }}" onclick="unblockIpAddress(this.dataset.ip)"
+                                        class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-emerald-400 hover:text-emerald-300 border border-slate-700 font-semibold text-[11px] inline-flex items-center space-x-1.5 transition cursor-pointer">
+                                        <i class="fa-solid fa-lock-open text-[10px]"></i>
+                                        <span>Buka Blokir</span>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="px-4 py-8 text-center text-slate-500">
+                                    <i class="fa-solid fa-shield-check text-2xl text-emerald-500 mb-2"></i>
+                                    <p>Tidak ada IP yang sedang diblokir saat ini.</p>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Blacklist Footer Info -->
+            <div class="p-3.5 px-5 border-t border-soc-border bg-slate-900/50 flex items-center justify-between text-xs">
+                <span class="text-slate-400" id="blacklist-footer-info">
+                    Total: <strong id="blacklist-count-text" class="text-rose-400">{{ blocked_ips|length if blocked_ips else 0 }}</strong> IP terdaftar dalam daftar hitam pertahanan
+                </span>
+                <span class="text-[11px] text-slate-500 flex items-center gap-1.5">
+                    <i class="fa-solid fa-bolt text-amber-400"></i>
+                    <span>Fast Path Protection Active</span>
+                </span>
+            </div>
+        </div>
+        <!-- End TAB 2 -->
+    </div>
+
+</div>
+
+<!-- ========================================================================= -->
+<!-- WINDOWS SECURITY STYLE PROTECTION HISTORY MODAL -->
+<!-- ========================================================================= -->
+<div id="incident-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200">
+    <div class="bg-[#12161f] border border-slate-700/80 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden transform scale-95 transition-transform duration-200" id="modal-container">
+        
+        <!-- Header Windows Security Style -->
+        <div class="p-6 pb-4 border-b border-slate-800/80 flex items-start justify-between bg-slate-900/50">
+            <div class="flex items-start space-x-3.5">
+                <!-- Blue/Cyan App Icon Window Box -->
+                <div class="w-10 h-10 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 text-lg flex-shrink-0 mt-0.5">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-bold text-white tracking-wide flex items-center gap-2">
+                        <span>Security Incident Details</span>
+                    </h3>
+                    <p class="text-xs text-slate-400 mt-0.5 font-mono" id="modal-timestamp">23/09/2026 11:35:17</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center">
+                <button onclick="closeIncidentModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer" title="Tutup">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Content Body (Windows Security Protection History Structure) -->
+        <div class="p-6 space-y-5 text-sm max-h-[70vh] overflow-y-auto">
+
+            <!-- 1. Detected -->
+            <div>
+                <span class="text-slate-400 text-xs font-medium uppercase tracking-wider block mb-1">Detected:</span>
+                <p class="text-rose-400 font-bold font-mono text-base flex items-center gap-2" id="modal-detected">
+                    <i class="fa-solid fa-bug text-xs"></i>
+                    <span>Cross-Site Scripting (XSS)</span>
+                </p>
+            </div>
+
+            <!-- 2. Date -->
+            <div>
+                <span class="text-slate-400 text-xs font-medium uppercase tracking-wider block mb-1">Date:</span>
+                <p class="text-slate-200 font-mono text-xs" id="modal-date">23/09/2026 11:35:17</p>
+            </div>
+
+            <!-- 4. Details -->
+            <div>
+                <span class="text-slate-400 text-xs font-medium uppercase tracking-wider block mb-1">Details:</span>
+                <p class="text-xs text-slate-300 leading-relaxed" id="modal-details">
+                    The incoming HTTP request contains dangerous syntax or behavioral patterns classified as an active cyber threat.
+                </p>
+            </div>
+
+            <!-- 5. Machine Learning (Random Forest) Prediction & Accuracy -->
+            <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-brain"></i>
+                        <span>Threat Intelligence Engine Analysis</span>
+                    </span>
+                    <span id="modal-detection-source" class="hidden"></span>
+                </div>
+
+                <div class="text-xs">
+                    <span class="text-slate-400 block mb-1">Prediction Confidence:</span>
+                    <div class="flex items-center space-x-3">
+                        <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                            <div id="modal-confidence-bar" class="bg-gradient-to-r from-cyan-500 to-rose-500 h-2.5 rounded-full transition-all duration-300" style="width: 95%;"></div>
+                        </div>
+                        <span class="font-mono font-bold text-slate-200 text-sm whitespace-nowrap" id="modal-confidence">95.0%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 6. Affected Items -->
+            <div>
+                <span class="text-slate-400 text-xs font-medium uppercase tracking-wider block mb-2">Affected items:</span>
+                <div class="bg-slate-950/80 rounded-xl border border-slate-800/90 p-4 space-y-2 text-xs font-mono">
+                    <div class="flex items-start">
+                        <span class="text-slate-500 w-28 flex-shrink-0">target_url:</span>
+                        <span class="text-slate-300 break-all select-all" id="modal-affected-url">http://prosiakad.test/...</span>
+                    </div>
+                    <div class="flex items-start">
+                        <span class="text-slate-500 w-28 flex-shrink-0">attacker_ip:</span>
+                        <span class="text-cyan-400 font-semibold select-all" id="modal-affected-ip">127.0.0.1</span>
+                    </div>
+                    <div class="flex items-start">
+                        <span class="text-slate-500 w-28 flex-shrink-0">http_method:</span>
+                        <span class="text-amber-400 select-all" id="modal-affected-method">POST</span>
+                    </div>
+                    <div class="flex items-start">
+                        <span class="text-slate-500 w-28 flex-shrink-0">injected_payload:</span>
+                        <div class="text-rose-300 bg-slate-900 px-2 py-1 rounded border border-slate-800 break-all select-all flex-1" id="modal-affected-payload">
+                            &lt;script&gt;alert(1)&lt;/script&gt;
+                        </div>
+                    </div>
+                    <div class="flex items-start">
+                        <span class="text-slate-500 w-28 flex-shrink-0">user_agent:</span>
+                        <span class="text-slate-400 break-all select-all text-[11px]" id="modal-affected-ua">Mozilla/5.0...</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Footer Actions Windows Security Style -->
+        <div class="p-4 px-6 border-t border-slate-800 bg-slate-900/60 flex items-center justify-between">
+            <span class="text-xs text-slate-500">Security Operations Center &bull; SIAKAD Defense</span>
+            <div class="flex items-center space-x-3">
+                <button onclick="copyPayload()" id="btn-copy-payload"
+                    class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition flex items-center space-x-1.5 cursor-pointer">
+                    <i class="fa-regular fa-copy"></i>
+                    <span id="copy-btn-text">Salin Payload</span>
+                </button>
+                <button type="button" id="btn-modal-block-ip" onclick="toggleBlockActiveIp()"
+                    class="px-3.5 py-1.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 text-rose-300 text-xs font-medium border border-rose-800/80 transition flex items-center space-x-1.5 cursor-pointer">
+                    <i id="modal-block-btn-icon" class="fa-solid fa-ban"></i>
+                    <span id="modal-block-btn-text">Blokir IP</span>
+                </button>
+                <button onclick="closeIncidentModal()"
+                    class="px-4 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold shadow-md shadow-cyan-600/20 transition cursor-pointer">
+                    Tutup
+                </button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}?v={{ range(10000, 99999) | random }}"></script>
+{% endblock %}
